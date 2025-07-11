@@ -119,8 +119,10 @@ def run_pf(measurements, u):
 
         # --- 更新 (ベクトル化) ---
         z = measurements[:, i]
-        # 尤度を一度に計算
-        likelihoods = multivariate_normal.pdf(z, mean=particles[:2, :].T, cov=R_ekf)
+        # 測定値zを中心とする多変量正規分布を作成
+        dist = multivariate_normal(mean=z, cov=R_ekf)
+        # 各パーティクルの位置における確率密度を一度に計算
+        likelihoods = dist.pdf(particles[:2, :].T)
         weights *= likelihoods
         weights += 1e-300
         weights /= np.sum(weights)
