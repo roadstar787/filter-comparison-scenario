@@ -1,4 +1,4 @@
-# 非線形状態推定：EKFとパーティクルフィルターの比較シナリオ
+# 非線形状態推定：拡張カルマンフィルターとパーティクルフィルターの比較シナリオ
 
 このシナリオでは、円運動を行うオブジェクトの状態を推定するために、拡張カルマンフィルター（EKF）とパーティクルフィルター（PF）を実装し、その性能をアニメーションで比較します。
 
@@ -16,22 +16,23 @@
 - `ekf.py`: 1次元の線形カルマンフィルターの基本的な実装です。（初期ステップ）
 - `particle_filter.py`: 1次元のパーティクルフィルターの基本的な実装です。（初期ステップ）
 - `compare_filters.py`: 1次元の線形モデルにおいて、EKFとPFの結果を静的に比較します。（中間ステップ）
-- `nonlinear_comparison.py`: **（メインファイル）** 2次元の非線形な円運動モデルを対象に、EKFとPFを実装し、パーティクルの動きを含めた比較アニメーションを生成します。
+- `nonlinear_comparison.py`: 2次元の非線形な円運動モデルを対象に、EKFとPFを実装し、比較アニメーションを生成します。（NumPyによるベクトル化版）
+- `optimized_comparison.py`: **（推奨メインファイル）** `nonlinear_comparison.py` のパーティクルフィルター実装を **Numba** でコンパイルし、計算を大幅に高速化したバージョンです。
 - `animation.gif`: `compare_filters.py` によって生成された、1次元線形モデルのアニメーション。
-- `nonlinear_animation.gif`: `nonlinear_comparison.py` によって生成された、最終的な円運動モデルのアニメーション。
+- `nonlinear_animation.gif`: `nonlinear_comparison.py` または `optimized_comparison.py` によって生成された、最終的な円運動モデルのアニメーション。
 
 ## 実行方法
 
 1.  **必要なライブラリをインストールします。**
     ターミナルで以下のコマンドを実行してください。
     ```bash
-    pip install numpy matplotlib scipy Pillow
+    pip install numpy matplotlib scipy Pillow numba
     ```
 
 2.  **メインスクリプトを実行します。**
-    以下のコマンドで、円運動の比較アニメーションを生成します。
+    以下のコマンドで、Numbaによって高速化されたバージョンの比較アニメーションを生成します。
     ```bash
-    python nonlinear_comparison.py
+    python optimized_comparison.py
     ```
 
 3.  **結果を確認します。**
@@ -57,5 +58,11 @@
 - **予測**: 各パーティクルを、ノイズを加えた制御入力に基づいて個別に動かします。
 - **更新**: 測定値と各パーティクルの位置との「近さ（尤度）」を計算し、各パーティクルの**重み**を更新します。
 - **リサンプリング**: 重みが小さい（見込みのない）パーティクルを淘汰し、重みが大きい（有望な）パーティクルを複製することで、効率的に確率分布を表現します。
+
+### 高速化 (`optimized_comparison.py`)
+
+- `optimized_comparison.py` では、計算負荷の大きいパーティクルフィルターの関数に **Numba** の `@jit(nopython=True)` デコレータを付与しています。
+- これにより、該当部分のPythonコードがJust-In-Time (JIT) コンパイルされ、C言語に匹敵する速度で実行されます。
+- NumPyのベクトル化だけでは到達できないレベルの高速化を実現しています。
 
 このシナリオを通じて、状態推定フィルタリングの奥深さと面白さを体験できます。
