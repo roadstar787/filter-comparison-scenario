@@ -95,42 +95,41 @@ def run_ekf(measurements, u):
         ekf_history.append(x_est)
     return np.array(ekf_history).squeeze().T
 
-# --- PF実装 ---
+# --- PF実装 (ベクトル化による高速化) ---
 def run_pf(measurements, u):
-    # PFの初期化：最初の測定値の周りにパーティクルを分布させる
-    # これにより、フィルタが現実的な初期位置から追跡を開始できる
-    initial_pos = measurements[:, 0].reshape(2, 1)
-    particles = np.vstack([
-        initial_pos[0] + np.random.randn(N_PARTICLES) * MEASUREMENT_NOISE_STD,
-        initial_pos[1] + np.random.randn(N_PARTICLES) * MEASUREMENT_NOISE_STD,
-        np.random.uniform(-np.pi, np.pi, N_PARTICLES)
-    ])
+    # PFの初期化
+    initial_pos = measurements[:, 0]
+    particles = np.zeros((3, N_PARTICLES))
+    particles[0, :] = initial_pos[0] + np.random.randn(N_PARTICLES) * MEASUREMENT_NOISE_STD
+    particles[1, :] = initial_pos[1] + np.random.randn(N_PARTICLES) * MEASUREMENT_NOISE_STD
+    particles[2, :] = np.random.uniform(-np.pi, np.pi, N_PARTICLES)
     weights = np.ones(N_PARTICLES) / N_PARTICLES
     
     pf_history = [np.average(particles, weights=weights, axis=1)]
     particles_history = [particles.copy()]
 
     for i in range(measurements.shape[1]):
-        # 予測
-        for j in range(N_PARTICLES):
-            # 制御入力にノイズを加えてばらつきを表現
-            u_noisy = u + np.sqrt(Q_pf) @ np.random.randn(2, 1)
-            particles[:, j] = motion_model(particles[:, j].reshape(3, 1), u_noisy, DT).flatten()
+        # --- 予測 (ベクトル化) ---
+        # 全パーティクルに一度にノイズを加える
+        u_noisy = u + np.sqrt(Q_pf) @ np.random.randn(2, N_PARTICLES)
+        # 全パーティクルの状態を一度に更新
+        particles[0, :] += u_noisy[0, :] * np.cos(particles[2, :]) * DT
+        particles[1, :] += u_noisy[0, :] * np.sin(particles[2, :]) * DT
+        particles[2, :] += u_noisy[1, :] * DT
 
-        # 更新 (尤度計算)
+        # --- 更新 (ベクトル化) ---
         z = measurements[:, i]
-        for j in range(N_PARTICLES):
-            likelihood = multivariate_normal.pdf(z, mean=particles[:2, j], cov=R_ekf)
-            weights[j] *= likelihood
-        
+        # 尤度を一度に計算
+        likelihoods = multivariate_normal.pdf(z, mean=particles[:2, :].T, cov=R_ekf)
+        weights *= likelihoods
         weights += 1e-300
         weights /= np.sum(weights)
 
-        # 状態推定
+        # --- 状態推定 ---
         x_est = np.average(particles, weights=weights, axis=1)
         pf_history.append(x_est)
         
-        # リサンプリング
+        # --- リサンプリング ---
         if 1.0 / np.sum(weights**2) < N_PARTICLES / 2.0:
             indexes = np.random.choice(N_PARTICLES, size=N_PARTICLES, p=weights, replace=True)
             particles = particles[:, indexes]
